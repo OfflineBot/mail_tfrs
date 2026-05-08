@@ -286,6 +286,65 @@ fn handle_train(
     json_response(200, &summary)
 }
 
+fn handle_model_upload(
+    req: &mut Request,
+    cfg: &AppConfig,
+    model: &Mutex<Option<MailModel>>,
+    train_lock: &Mutex<()>,
+) -> Response<std::io::Cursor<Vec<u8>>> {
+    let _guard = match train_lock.try_lock() {
+        Ok(g) => g,
+        Err(_) => return err(409, "training or upload in progress"),
+    };
+
+    let body = match read_body(req) { Ok(b) => b, Err(e) => return err(400, e) };
+    if body.is_empty() {
+        return err(400, "empty body — POST the model file as raw bytes");
+    }
+
+    if let Some(parent) = cfg.model_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let tmp = cfg.model_path.with_extension("bin.upload");
+    if let Err(e) = std::fs::write(&tmp, &body) {
+        return err(500, format!("write tmp: {e}"));
+    }
+
+    match MailModel::load(&tmp, cfg.arch) {
+        Ok(loaded) => {
+            if let Err(e) = std::fs::rename(&tmp, &cfg.model_path) {
+                return err(500, format!("rename: {e}"));
+            }
+            let categories = loaded.categories.clone();
+            *model.lock().unwrap() = Some(loaded);
+            json_response(200, &InfoBody {
+                model_path: cfg.model_path.display().to_string(),
+                arch: cfg.arch.into(),
+                categories,
+                threshold: cfg.threshold,
+            })
+        }
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp);
+            err(400, format!("invalid model file: {e}"))
+        }
+    }
+}
+
+fn handle_model_download(cfg: &AppConfig) -> Response<std::io::Cursor<Vec<u8>>> {
+    if !cfg.model_path.exists() {
+        return err(404, format!("no model at {}", cfg.model_path.display()));
+    }
+    let bytes = match std::fs::read(&cfg.model_path) {
+        Ok(b) => b,
+        Err(e) => return err(500, format!("read {}: {e}", cfg.model_path.display())),
+    };
+    Response::from_data(bytes)
+        .with_status_code(StatusCode(200))
+        .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/octet-stream"[..]).unwrap())
+        .with_header(Header::from_bytes(&b"Content-Disposition"[..], &b"attachment; filename=\"mail_model.bin\""[..]).unwrap())
+}
+
 // ============================ main ==========================================
 
 fn try_load_initial_model(cfg: &AppConfig) -> Option<MailModel> {
@@ -330,6 +389,8 @@ fn run() -> Result<(), String> {
             (Method::Get,  "/info")    => handle_info(&cfg, &model),
             (Method::Post, "/predict") => handle_predict(&mut req, &cfg, &model),
             (Method::Post, "/train")   => handle_train(&mut req, &cfg, &model, &train_lock),
+            (Method::Post, "/model")   => handle_model_upload(&mut req, &cfg, &model, &train_lock),
+            (Method::Get,  "/model")   => handle_model_download(&cfg),
             (Method::Get,  "/")        => handle_health(),
             _ => err(404, format!("no route for {method} {path}")),
         };

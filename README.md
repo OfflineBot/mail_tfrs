@@ -49,6 +49,20 @@ Steps:
 | GET    | `/info`    | —                                          | model arch + categories          |
 | POST   | `/predict` | `{subject, sender_name, sender_email, body, threshold?}` | `[{name, probability, predicted}]` |
 | POST   | `/train`   | `{files?, fresh?, max_steps?, max_epochs?, target_label_acc?, eval_every_steps?, lr?, seed?, log_every?}` | training summary |
+| POST   | `/model`   | raw bytes of a `mail_model.bin`            | new `/info` body on success, 400 on invalid file |
+| GET    | `/model`   | —                                          | the current `mail_model.bin` as `application/octet-stream` |
+
+The `/model` endpoint validates the upload (magic bytes, version, architecture
+match against env vars) before swapping it in. A failed upload leaves the
+existing model untouched. Example:
+
+```sh
+# upload a locally-trained checkpoint to the running server
+curl -X POST --data-binary @mail_model.bin http://your-host:8090/model
+
+# pull the current checkpoint back down
+curl -o mail_model.bin http://your-host:8090/model
+```
 
 Training is synchronous and serialised: a second `/train` while one is running
 returns `409 Conflict`.
