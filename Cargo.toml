@@ -1,0 +1,3 @@
+[workspace]
+members = ["tfrs", "mail_tfrs"]
+resolver = "3"

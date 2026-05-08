@@ -1,0 +1,19 @@
+[package]
+name = "transformer"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "transformer"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tfrs"
+path = "src/bin/tfrs.rs"
+
+[dependencies]
+ndarray = "0.17.2"
+ndarray-rand = "0.16.0"
+tokenizers = { version = "0.20", default-features = false, features = ["onig"] }
+serde = { version = "1", features = ["derive"] }
+ron = "0.8"

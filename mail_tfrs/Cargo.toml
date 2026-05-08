@@ -1,0 +1,23 @@
+[package]
+name = "mail_tfrs"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "mail_tfrs"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mail_tfrs"
+path = "src/bin/cli.rs"
+
+[[bin]]
+name = "mail_tfrs_server"
+path = "src/bin/server.rs"
+
+[dependencies]
+transformer = { path = "../tfrs" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ron = "0.8"
+tiny_http = "0.12"

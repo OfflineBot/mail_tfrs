@@ -1,0 +1,7 @@
+target/
+/bin/
+/*/bin/
+/dist/
+/*/dist/
+/*/mail_model.bin
+.DS_Store

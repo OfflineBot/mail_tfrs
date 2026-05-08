@@ -1,0 +1,58 @@
+# Drop this service into your existing docker-compose.yml.
+#
+# ============================================================================
+# OPTION A — local build, no registry, no extra setup
+# ============================================================================
+# Requires: both `tfrs/` and `mail_tfrs/` checked out side by side. Set
+# MAIL_TFRS_CTX to the parent directory containing both. The image is built
+# the first time you `docker compose up` and cached afterwards.
+#
+# Example: if your folders are ~/Coding/rust/{tfrs,mail_tfrs}, then
+# MAIL_TFRS_CTX=~/Coding/rust in your .env (or pass via shell).
+#
+#   mail_tfrs:
+#     build:
+#       context: ${MAIL_TFRS_CTX:-../}
+#       dockerfile: mail_tfrs/Dockerfile
+#     ports:
+#       - "${MAIL_TFRS_PORT:-127.0.0.1:8090}:8080"
+#     environment:
+#       MAIL_TFRS_BIND: 0.0.0.0:8080
+#       MAIL_TFRS_MODEL: /home/app/data/mail_model.bin
+#       MAIL_TFRS_DATASETS: /home/app/data
+#     volumes:
+#       - mail_tfrs_data:/home/app/data
+#     restart: unless-stopped
+#
+# Then add to the bottom-level `volumes:` block:
+#   mail_tfrs_data:
+#
+# ============================================================================
+# OPTION B — pull a hosted image (after you set up the GHCR workflow)
+# ============================================================================
+# Once the GitHub Actions workflow has pushed `ghcr.io/<owner>/mail_tfrs:latest`,
+# replace the `build:` block above with `image:`:
+#
+#   mail_tfrs:
+#     image: ghcr.io/<your-gh-user>/mail_tfrs:latest
+#     ports:
+#       - "${MAIL_TFRS_PORT:-127.0.0.1:8090}:8080"
+#     volumes:
+#       - mail_tfrs_data:/home/app/data
+#     restart: unless-stopped
+#
+# Public images need no auth. For private images:
+#   docker login ghcr.io -u <user> -p <PAT-with-read:packages>
+# on the host before `docker compose pull`.
+#
+# ============================================================================
+# Endpoints (both options)
+# ============================================================================
+#   GET  /health            → "ok"
+#   GET  /info              → loaded model metadata (503 if no checkpoint yet)
+#   POST /predict           → JSON MailInput → predicted labels
+#   POST /train             → JSON {files, max_steps, ...} → TrainSummary (sync)
+#
+# Put your dataset_*.ron files into the volume (or bind-mount a host dir at
+# /home/app/data) before calling /train. Or pass absolute paths in the
+# request body.
