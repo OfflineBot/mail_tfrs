@@ -169,6 +169,34 @@ fn handle_health() -> Response<std::io::Cursor<Vec<u8>>> {
         .with_header(Header::from_bytes(&b"Content-Type"[..], &b"text/plain"[..]).unwrap())
 }
 
+#[derive(Serialize)]
+struct Route {
+    method: &'static str,
+    path: &'static str,
+    desc: &'static str,
+}
+
+#[derive(Serialize)]
+struct HelpBody {
+    service: &'static str,
+    routes: &'static [Route],
+}
+
+const ROUTES: &[Route] = &[
+    Route { method: "GET",  path: "/",        desc: "this help listing" },
+    Route { method: "GET",  path: "/help",    desc: "this help listing" },
+    Route { method: "GET",  path: "/health",  desc: "liveness probe — returns plain 'ok'" },
+    Route { method: "GET",  path: "/info",    desc: "loaded model metadata (503 if no model loaded)" },
+    Route { method: "POST", path: "/predict", desc: "JSON {subject?, sender_name?, sender_email?, body, threshold?} → predicted labels" },
+    Route { method: "POST", path: "/train",   desc: "JSON {files?, fresh?, max_steps?, max_epochs?, target_label_acc?, eval_every_steps?, lr?, seed?, log_every?} → training summary (sync, one at a time)" },
+    Route { method: "POST", path: "/model",   desc: "upload a mail_model.bin as raw body bytes; validated and swapped in atomically" },
+    Route { method: "GET",  path: "/model",   desc: "download the current mail_model.bin (application/octet-stream)" },
+];
+
+fn handle_help() -> Response<std::io::Cursor<Vec<u8>>> {
+    json_response(200, &HelpBody { service: "mail_tfrs", routes: ROUTES })
+}
+
 fn handle_info(cfg: &AppConfig, model: &Mutex<Option<MailModel>>) -> Response<std::io::Cursor<Vec<u8>>> {
     let guard = model.lock().unwrap();
     match guard.as_ref() {
@@ -385,13 +413,14 @@ fn run() -> Result<(), String> {
         let path = url.split('?').next().unwrap_or("").to_string();
 
         let resp = match (&method, path.as_str()) {
+            (Method::Get,  "/")        => handle_help(),
+            (Method::Get,  "/help")    => handle_help(),
             (Method::Get,  "/health")  => handle_health(),
             (Method::Get,  "/info")    => handle_info(&cfg, &model),
             (Method::Post, "/predict") => handle_predict(&mut req, &cfg, &model),
             (Method::Post, "/train")   => handle_train(&mut req, &cfg, &model, &train_lock),
             (Method::Post, "/model")   => handle_model_upload(&mut req, &cfg, &model, &train_lock),
             (Method::Get,  "/model")   => handle_model_download(&cfg),
-            (Method::Get,  "/")        => handle_health(),
             _ => err(404, format!("no route for {method} {path}")),
         };
 
